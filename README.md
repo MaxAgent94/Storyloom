@@ -10,7 +10,7 @@ Source repository: [MaxAgent94/Storyloom](https://github.com/MaxAgent94/Storyloo
 
 The production deployment contains the Supabase public connection values and an independently generated server-only `KEY_ENCRYPTION_SECRET`. The secret was transmitted only to Vercel after explicit user authorization; it is absent from GitHub and browser code.
 
-Remaining setup: create the personal Supabase Auth user and insert its UUID into `allowed_users`, then verify the hosted end-to-end flow. No live OpenRouter inference or physical iPad verification has been completed. The connector created deployments successfully but cannot read deployment status/logs under the account scope, so the protected alias response is the current production verification boundary.
+The personal Supabase Auth user is confirmed and allowlisted. Its authenticated database role passes the production allowlist policy. Remaining acceptance work is to sign in through the hosted interface, add an OpenRouter key, run the creative workflow, and physically verify the iPad experience. No live OpenRouter inference or physical iPad verification has been completed. The connector created deployments successfully but cannot read deployment status/logs under the account scope, so the protected alias response plus the production database policy check are the current verification boundary.
 
 ## Pinned runtime
 
@@ -48,7 +48,7 @@ The PGlite development dependency runs actual PostgreSQL schema/RLS/transaction 
 
 1. **Complete:** the new `storyloom` Supabase project is `mozpgfkmdhnukfqthslg`. Reuse this isolated resource; do not provision a duplicate.
 2. **Complete:** `database/schema.sql` was applied as `storyloom_initial_schema`; security advisors found no issues. Do not reapply the initial schema. Use new migrations for changes.
-3. Disable public signups. Create one password-authenticated personal user through the Supabase dashboard. Add its UUID to `public.allowed_users` through the SQL editor. Do not ask the writer to paste a password into chat. No custom email or signup infrastructure is needed.
+3. **Owner account complete:** one confirmed password-authenticated personal user exists and is present in `public.allowed_users`. Keep public signups disabled. Do not ask the writer to paste a password into chat. No custom email or signup infrastructure is needed.
 4. Source belongs in the supplied `MaxAgent94/Storyloom` repository. Do not use another application repository.
 5. Create and verify a **new** Vercel project linked only to that repository. Use the Next.js framework preset and Node 24.x. Check project/team/repository IDs before any deployment or environment mutation.
 6. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and server-only `KEY_ENCRYPTION_SECRET` in the new project's Vercel environment. The encryption secret must be 32 random bytes encoded as 64 hex characters (`openssl rand -hex 32`). Retain it securely; rotation without migration makes saved OpenRouter keys unreadable. Never commit `.env.local` or log secrets.
@@ -111,4 +111,4 @@ On a 13-inch iPad in landscape and a laptop:
 
 ## Validation completed locally
 
-Production build passes on pinned Next.js/TypeScript. Five meaningful tests cover explicit context isolation, invalid hierarchies, portable Markdown subtree export, prompt order, and real PostgreSQL save/version/restore/conflict/RLS behavior. The PostgreSQL test verifies a second authenticated owner cannot read another owner's project or section history. Hosted Supabase, Vercel runtime, live OpenRouter, and browser interaction remain unverified until provisioning is completed.
+Production build passes on pinned Next.js/TypeScript. Five meaningful tests cover explicit context isolation, invalid hierarchies, portable Markdown subtree export, prompt order, and real PostgreSQL save/version/restore/conflict/RLS behavior. The PostgreSQL test verifies a second authenticated owner cannot read another owner's project or section history. The hosted Supabase schema, RLS security advisors, confirmed owner allowlist, and authenticated-role policy have been verified. Vercel serves the protected production alias. Live OpenRouter inference, authenticated browser interaction, and physical iPad use remain to be accepted through the checklist above.
