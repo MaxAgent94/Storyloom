@@ -48,7 +48,7 @@ The PGlite development dependency runs actual PostgreSQL schema/RLS/transaction 
 
 1. **Complete:** the new `storyloom` Supabase project is `mozpgfkmdhnukfqthslg`. Reuse this isolated resource; do not provision a duplicate.
 2. **Complete:** `database/schema.sql` was applied as `storyloom_initial_schema`; security advisors found no issues. Do not reapply the initial schema. Use new migrations for changes.
-3. **Owner account complete:** one confirmed password-authenticated personal user exists and is present in `public.allowed_users`. Keep public signups disabled. Do not ask the writer to paste a password into chat. No custom email or signup infrastructure is needed.
+3. **Owner account complete:** one confirmed password-authenticated personal user exists and is present in `public.allowed_users`. Disable public signups in the Supabase dashboard if its toggle is still enabled. Do not ask the writer to paste a password into chat. No custom email or signup infrastructure is needed.
 4. Source belongs in the supplied `MaxAgent94/Storyloom` repository. Do not use another application repository.
 5. Create and verify a **new** Vercel project linked only to that repository. Use the Next.js framework preset and Node 24.x. Check project/team/repository IDs before any deployment or environment mutation.
 6. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and server-only `KEY_ENCRYPTION_SECRET` in the new project's Vercel environment. The encryption secret must be 32 random bytes encoded as 64 hex characters (`openssl rand -hex 32`). Retain it securely; rotation without migration makes saved OpenRouter keys unreadable. Never commit `.env.local` or log secrets.
