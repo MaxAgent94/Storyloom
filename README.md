@@ -4,13 +4,13 @@ A personal, browser-native fiction writing room. Start with what you know; add c
 
 ## Current delivery status
 
-The production build and local tests pass. The new Supabase database is provisioned, its initial schema is applied, all five public tables have row-level security, and security advisors found no issues. The web app is **not deployed yet**.
+The production build is deployed at `https://storyloom-writing-194d3ec4-max-agent94.vercel.app`. Vercel Authentication protects the app. The Supabase database is provisioned, its initial schema is applied, all five public tables have row-level security, and security advisors found no issues.
 
 Source repository: [MaxAgent94/Storyloom](https://github.com/MaxAgent94/Storyloom).
 
-Remaining setup: create the personal auth user and allowlist entry, disable public signup, configure the server environment in a new Vercel project, and verify the hosted end-to-end flow. No live inference or physical iPad verification has been completed.
+The production deployment contains the Supabase public connection values and an independently generated server-only `KEY_ENCRYPTION_SECRET`. The secret was transmitted only to Vercel after explicit user authorization; it is absent from GitHub and browser code.
 
-The Vercel connector currently cannot list projects for the supplied account. Deployment must use a verified new project, never an existing application's resources.
+Remaining setup: create the personal Supabase Auth user and insert its UUID into `allowed_users`, then verify the hosted end-to-end flow. No live OpenRouter inference or physical iPad verification has been completed. The connector created deployments successfully but cannot read deployment status/logs under the account scope, so the protected alias response is the current production verification boundary.
 
 ## Pinned runtime
 
