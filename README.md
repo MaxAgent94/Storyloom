@@ -58,6 +58,8 @@ The PGlite development dependency runs actual PostgreSQL schema/RLS/transaction 
 
 ## Implemented vertical slice
 
+- Book Outline now offers **Create Chapters / Scenes from Outline**. Explicit `## Chapter` and `### Scene` headings are parsed locally. Loose outlines use the selected OpenRouter preset with only book synopsis/outline and selected project canon/research. Review chapter/scene names, intent, ordering, additions and removals before approval. Append preserves existing nodes; alternative copy creates a separate Book. Only chapter outline and scene synopsis fields are populated. Production browser acceptance of this addition is pending.
+
 - Project → Book → Chapter → Scene, with touch-visible create, rename, move up/down, duplicate, and reversible archive controls. Archiving requires confirmation; permanent deletion is intentionally omitted.
 - Editable Markdown synopsis, outline, scene plan, beats, detailed beats, manuscript, and scratchpad.
 - Optional project canon/research/voice and book act/recent-state sections. No required fields beyond item names.

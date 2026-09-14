@@ -1,5 +1,6 @@
 import { session, failure, body, decrypt } from "@/lib/server";
-import { contextText, promptMessages, type Project } from "@/lib/domain";
+import { contextText, promptMessages, insertProse, type Project } from "@/lib/domain";
+import { structureSources, structureInstruction } from '@/lib/structure';
 export const maxDuration = 300;
 export async function POST(req: Request) {
   try {
@@ -27,8 +28,10 @@ export async function POST(req: Request) {
     const p = row.body as Project,
       n = p.nodes.find((n) => n.id === b.nodeId);
     if (!n) throw new Error("Scene or book not found.");
-    const context = contextText(p, n, b.sources);
-    const history = b.includeChat ? p.messages.slice(-20) : [];
+    if (b.action === 'structure' && n.kind !== 'book') throw new Error('Select a Book to propose structure.');
+    const context = contextText(p, n, b.action === 'structure' ? structureSources(p,n,b.sources) : b.sources);
+    const history = b.action !== 'structure' && b.includeChat ? p.messages.slice(-20) : [];
+    if (b.action === 'structure') { b.instruction = structureInstruction; b.section = 'outline'; }
     const { data: cred } = await db
       .from("provider_credentials")
       .select("ciphertext")
@@ -70,9 +73,16 @@ export async function POST(req: Request) {
     const output = result.choices?.[0]?.message?.content;
     if (typeof output !== "string" || !output.trim())
       throw new Error("The model returned no text. Try another model.");
+    let proposedOutput = output;
+    if (b.action === 'prose') {
+      const previous = n.sections.manuscript || '';
+      const {start,end} = b.insertion || {};
+      if (b.section !== 'manuscript' || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > previous.length) throw new Error('Invalid manuscript selection.');
+      proposedOutput = insertProse(previous,output,start,end);
+    }
     const completed = {
       id: crypto.randomUUID(),
-      output,
+      output: proposedOutput,
       context,
       model: result.model || b.model,
       usage: result.usage,

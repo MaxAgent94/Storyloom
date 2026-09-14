@@ -196,10 +196,16 @@ small {
 }
 .panes {
   display: grid;
-  grid-template-columns: 242px minmax(360px, 1fr) 348px;
+  grid-template-columns: minmax(360px, 1fr) 348px;
   flex: 1;
   min-height: 0;
 }
+.book-beats { overflow-y: auto; flex: 1; padding: 20px; }
+.book-beats section { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.book-beats textarea { width: 100%; min-height: 180px; margin: 12px 0; }
+.navigator:not(.open) { display: none; }
+.navigator.open { display: flex; position: fixed; left: 0; top: 68px; bottom: 0; width: 280px; z-index: 20; box-shadow: 10px 0 35px #26352d22; }
+.topbar .nav-toggle { display: block; }
 .navigator {
   background: var(--surface);
   border-right: 1px solid var(--line);

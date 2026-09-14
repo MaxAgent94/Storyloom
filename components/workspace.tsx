@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, configured, supabase } from "@/lib/browser";
+import StructureReview from './structure-review';
+import BookBeats from './book-beats';
+import { parseStructure, validStructure, structureSources, structureInstruction, materialize, type ChapterPlan } from '@/lib/structure';
 import {
   ancestry,
   contextText,
@@ -55,6 +58,7 @@ function download(name: string, text: string, type = "text/markdown") {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export default function Workspace() {
+  const [structure, setStructure] = useState<{plan: ChapterPlan[]; bookId: string; projectId: string; outline: string; origin: string; generation?: string} | null>(null);
   const [signed, setSigned] = useState(false),
     [checking, setChecking] = useState(true),
     [demo, setDemo] = useState(false);
@@ -279,7 +283,7 @@ export default function Workspace() {
       revision.current = row.revision;
       dirty.current = false;
       setProject(row.body);
-      selectNode(row.body.nodes[0]);
+      selectNode(row.body.nodes.find((n: Node)=>n.kind==='book'&&!n.archived) || row.body.nodes[0]);
       setStatus("Saved to cloud");
     } catch (e) {
       alertError(e);
@@ -304,7 +308,7 @@ export default function Workspace() {
   }
   function addNode() {
     if (!project || !node) return;
-    const kind = (
+    const kind = node.kind === 'book' ? 'book' : (
       { project: "book", book: "chapter", chapter: "scene" } as Record<
         string,
         Kind
@@ -312,7 +316,7 @@ export default function Workspace() {
     )[node.kind];
     if (!kind) return;
     ask(`New ${kind}`, "", (title) => {
-      const n = makeNode(kind, node.id, title);
+      const n = makeNode(kind, kind==='book' ? project.id : node.id, title);
       change({ ...current.current!, nodes: [...current.current!.nodes, n] });
       selectNode(n);
     });
@@ -432,7 +436,41 @@ export default function Workspace() {
     selectNode(newScenes[0]);
     setModal("");
   }
-  async function generate(action: string) {
+  async function openStructure() {
+    if (!project || node?.kind !== 'book' || busy) return;
+    const outline = node.sections.outline || '';
+    if (!outline.trim()) { setError('Write or generate a Book outline first.'); return; }
+    const base = {bookId: node.id, projectId: project.id, outline};
+    const parsed = parseStructure(outline);
+    if (parsed) { setStructure({...base, plan: parsed, origin: 'Parsed locally · no API tokens used'}); return; }
+    if (demo || !preset.model) { setError('This outline needs AI interpretation. Sign in and choose a model, or use ## Chapter / ### Scene headings.'); setPanel('model'); setRight(true); return; }
+    if (!(await save())) return;
+    setBusy(true);
+    try {
+      const result = await api('ai', {projectId: project.id, revision: revision.current, nodeId: node.id,
+        sources: structureSources(project,node,selectedSources), includeChat:false, instruction:structureInstruction,
+        model:preset.model, temperature:preset.temperature, maxTokens:preset.maxTokens, section:'outline', preset:preset.name, action:'structure'});
+      const plan: unknown = JSON.parse(result.output.trim().replace(/^```(?:json)?\s*|\s*```$/g,''));
+      if (!validStructure(plan)) throw new Error('The model returned an invalid hierarchy. Nothing was created. Try again or use chapter/scene headings.');
+      if (current.current?.id !== base.projectId) return;
+      setStructure({...base, plan, origin:`Proposed by AI · ${result.model} · ${preset.name}`,generation:result.id});
+      if (!result.checkpointSaved) setError('The AI checkpoint could not be saved. Keep this review open until approval saves successfully.');
+    } catch(e) { alertError(e); } finally { setBusy(false); }
+  }
+  async function approveStructure(plan: ChapterPlan[], alternative: boolean) {
+    if (!structure) return;
+    try {
+      if (!(await save())) return;
+      const p = current.current;
+      if (!p || p.id !== structure.projectId || p.nodes.find(n=>n.id===structure.bookId)?.sections.outline !== structure.outline)
+        throw new Error('The source outline changed. Cancel and propose structure again.');
+      const result = materialize(p,structure.bookId,plan,alternative);
+      change(result.project,{action:'create-structure',origin:structure.origin,generationId:structure.generation,sourceOutline:structure.outline,reviewedStructure:plan});
+      setStructure(null); setSelected(result.firstScene); setSection('synopsis');
+      await save();
+    } catch(e) { alertError(e); }
+  }
+  async function generate(action: string, beat = '') {
     if (!project || !node || busy) return;
     if (demo) {
       setError(
@@ -450,7 +488,7 @@ export default function Workspace() {
     const p = current.current!,
       target = node.id,
       targetSection =
-        action === "outline"
+        action === 'prose' ? 'manuscript' : action === 'sceneBeats' ? 'sceneBeats' : action === "outline"
           ? "outline"
           : action === "beats"
             ? "beats"
@@ -459,7 +497,12 @@ export default function Workspace() {
               : action === "scenePlan"
                 ? "scenePlan"
                 : section;
-    const instruction =
+    const prose = node.sections.manuscript || '';
+    const start = section === 'manuscript' ? editor.current?.selectionStart ?? prose.length : prose.length;
+    const end = section === 'manuscript' ? editor.current?.selectionEnd ?? start : start;
+    const instruction = action === 'prose'
+      ? `Write only the prose to insert at the indicated cursor, or replace the selected passage. Preserve the writer's instructions and supplied dialogue. ${beat ? `Render this scene beat as prose: ${beat}` : guidance}\nBefore cursor:\n${prose.slice(Math.max(0,start-16000),start)}\nSelected passage:\n${prose.slice(start,end)}\nAfter cursor:\n${prose.slice(end,end+4000)}`
+      : action === 'sceneBeats' ? `Turn the Book outline into editable scene beats. Use a ## Scene title heading for every planning unit, followed by what should happen. Do not write prose. ${guidance}` :
       action === "chat"
         ? guidance
         : `${action === "revise" ? "Revise" : action === "fromChat" ? "Convert the decisions in our conversation into" : "Generate"} ${labels[targetSection] || targetSection} for ${node.title}. Return only the proposed section as editable Markdown. Preserve the writer’s decisions. ${guidance}`;
@@ -471,8 +514,8 @@ export default function Workspace() {
         projectId: p.id,
         revision: revision.current,
         nodeId: target,
-        sources: selectedSources,
-        includeChat,
+        sources: Array.from(new Set([...selectedSources, ...(node.kind === 'book' && ['outline','sceneBeats','prose'].includes(action) ? [`${node.id}:synopsis`, ...(action !== 'outline' ? [`${node.id}:outline`] : [])] : [])])),
+        includeChat: action === 'chat' || action === 'fromChat' ? includeChat : false,
         instruction,
         model: preset.model,
         temperature: preset.temperature,
@@ -480,6 +523,7 @@ export default function Workspace() {
         section: targetSection,
         preset: preset.name,
         action,
+        ...(action === 'prose' ? {insertion:{start,end}} : {}),
       });
       const latest = current.current!;
       const at = result.at;
@@ -532,6 +576,7 @@ export default function Workspace() {
         },
       );
       if (action !== "chat") {
+        if (action === 'prose') setSection('manuscript');
         setProposalId(proposal.id);
         setProposalText(proposal.output);
         setModal("proposal");
@@ -847,7 +892,7 @@ export default function Workspace() {
               {node?.kind === "project"
                 ? "book"
                 : node?.kind === "book"
-                  ? "chapter"
+                  ? "book"
                   : "scene"}
             </button>
             <label className="check">
@@ -964,7 +1009,7 @@ export default function Workspace() {
                 role="tablist"
                 aria-label="Writing sections"
               >
-                {fields[node.kind].map((f) => (
+                {(node.kind === 'project' ? [] : node.kind === 'book' ? ['synopsis','outline','sceneBeats','manuscript'] : fields[node.kind]).map((f) => (
                   <button
                     key={f}
                     role="tab"
@@ -1009,8 +1054,14 @@ export default function Workspace() {
                   ↓ .md
                 </button>
               </div>
-              <textarea
+              {node.kind === 'book' && <div className="editor-tools">
+                {section==='synopsis' && <button disabled={busy} onClick={()=>void generate('outline')}>Generate outline</button>}
+                {section==='outline' && <button disabled={busy} onClick={()=>void generate('sceneBeats')}>Generate scene beats</button>}
+                {section==='manuscript' && <><span>Select prose to rewrite, or place the cursor to insert. Enter guidance in the right pane.</span><button disabled={busy||!guidance.trim()} onClick={()=>void generate('prose')}>Write / rewrite with AI</button><button onClick={()=>{setRight(true);setPanel('model');}}>Writing guidance & model</button></>}
+              </div>}
+              {node.kind === 'book' && section === 'sceneBeats' ? <BookBeats value={node.sections.sceneBeats||''} onChange={textChange} busy={busy} onGenerate={beat=>{setConfirmDialog({title:'Generate scene in manuscript',description:'The proposed scene will be appended to the Book manuscript. You can edit and review the complete manuscript proposal before accepting.',action:()=>{void generate('prose',beat);}});}}/> : <textarea
                 ref={editor}
+                hidden={node.kind === 'project'}
                 className={`editor ${section === "manuscript" ? "manuscript" : ""}`}
                 aria-label={labels[section] || section}
                 value={node.sections[section] || ""}
@@ -1025,7 +1076,8 @@ export default function Workspace() {
                         : `Start your ${labels[section]?.toLowerCase() || section} here…`
                 }
                 spellCheck
-              />
+              />}
+              {node.kind === 'project' && <div className="empty"><h2>Start with a Book</h2><p>Synopsis → Outline → Scene Beats → Manuscript</p><button onClick={addNode}>Create Book</button>{project.nodes.filter(n=>n.kind==='book'&&!n.archived).map(b=><button key={b.id} onClick={()=>selectNode(b)}>{b.title}</button>)}<p>Project notes, canon, and research are in the Context pane.</p></div>}
               <footer className="editor-footer">
                 <span>
                   {(node.sections[section] || "")
@@ -1036,7 +1088,7 @@ export default function Workspace() {
                   words <span className="muted">· Markdown</span>
                 </span>
                 <div>
-                  {(node.kind === "book" || node.kind === "chapter") && (
+                  {node.kind === "chapter" && (
                     <button disabled={busy} onClick={openScenes}>
                       Create scenes from selection
                     </button>
@@ -1110,7 +1162,7 @@ export default function Workspace() {
               aria-selected={panel === "model"}
               onClick={() => setPanel("model")}
             >
-              Model
+              AI / Model
             </button>
           </div>
           {panel === "chat" ? (
@@ -1179,7 +1231,8 @@ export default function Workspace() {
             </>
           ) : panel === "context" ? (
             <div className="panel-scroll">
-              <h3>Give it what it needs.</h3>
+              <h3>Story context</h3>
+              {project && node && ancestry(project,node).filter(n=>n.kind==='project'||n.kind==='book').map(n=><details key={n.id}><summary>{n.title} · edit context</summary>{(n.kind==='project'?['notes','canon','voice','research']:['recentContext','actSummaries','currentAct','voice','notes']).map(k=><label key={k}>{labels[k]}<textarea value={n.sections[k]||''} onChange={e=>{const p=current.current!;change({...p,nodes:p.nodes.map(x=>x.id===n.id?{...x,sections:{...x.sections,[k]:e.target.value}}:x)});}}/></label>)}</details>)}
               <p className="muted">
                 Only checked sources are attached. Empty sections stay out.
               </p>
@@ -1793,6 +1846,7 @@ export default function Workspace() {
           </section>
         </div>
       )}
+      {structure && <StructureReview initial={structure.plan} origin={structure.origin} existing={!!project?.nodes.some(n=>n.parent===structure.bookId)} onCancel={()=>setStructure(null)} onApprove={approveStructure}/>}
     </div>
   );
   function renderTree(n: Node, depth: number): React.ReactNode {

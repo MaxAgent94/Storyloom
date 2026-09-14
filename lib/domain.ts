@@ -1,4 +1,9 @@
 export type Kind = "project" | "book" | "chapter" | "scene";
+export function insertProse(previous: string, prose: string, start: number, end: number) {
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > previous.length) throw new Error('Invalid manuscript selection.');
+  const before=previous.slice(0,start), after=previous.slice(end);
+  return before + (start===end && before && !/\s$/.test(before) ? '\n\n' : '') + prose + (start===end && after && !/^\s/.test(after) ? '\n\n' : '') + after;
+}
 export type Node = {
   id: string;
   parent: string | null;
@@ -48,6 +53,8 @@ export const fields: Record<Kind, string[]> = {
   book: [
     "synopsis",
     "outline",
+    "sceneBeats",
+    "manuscript",
     "actSummaries",
     "currentAct",
     "recentContext",
@@ -58,6 +65,7 @@ export const fields: Record<Kind, string[]> = {
   scene: ["synopsis", "beats", "detailedBeats", "manuscript", "notes"],
 };
 export const labels: Record<string, string> = {
+  sceneBeats: "Scene Beats",
   synopsis: "Synopsis / intent",
   outline: "Outline",
   scenePlan: "Scene plan",
