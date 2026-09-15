@@ -497,6 +497,47 @@ small {
   width: 100%;
   margin-bottom: 10px;
 }
+.model-picker-trigger {
+  width: 100%;
+  text-align: left;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+.model-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.model-actions button {
+  min-height: 44px;
+  font-size: 12px;
+}
+.model-results {
+  display: grid;
+  gap: 7px;
+  max-height: 55dvh;
+  overflow: auto;
+  margin-top: 8px;
+}
+.model-results button {
+  display: grid;
+  gap: 5px;
+  min-height: 58px;
+  padding: 11px 13px;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+.model-results button.selected {
+  border-color: var(--accent);
+  background: var(--tint);
+}
+.model-results small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .panel-scroll p {
   font-size: 14px;
 }

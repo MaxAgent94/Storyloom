@@ -83,6 +83,7 @@ export default function Workspace() {
     [includeChat, setIncludeChat] = useState(true),
     [presetId, setPresetId] = useState("economy");
   const [models, setModels] = useState<Model[]>([]),
+    [modelSearch, setModelSearch] = useState(""),
     [key, setKey] = useState(""),
     [hasKey, setHasKey] = useState(false),
     [busy, setBusy] = useState(false),
@@ -1413,21 +1414,36 @@ export default function Workspace() {
               </label>
               <label>
                 OpenRouter model
-                <input
-                  list="models"
-                  placeholder="provider/model-id"
-                  value={preset.model}
+                <button
+                  type="button"
+                  className="model-picker-trigger"
                   disabled={!project}
-                  onChange={(e) => updatePreset({ model: e.target.value })}
-                />
-                <datalist id="models">
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </datalist>
+                  onClick={() => {
+                    setModelSearch("");
+                    setModal("models");
+                  }}
+                >
+                  {preset.model || "Choose from available models"}
+                </button>
               </label>
+              <div className="model-actions">
+                <button
+                  disabled={!project}
+                  onClick={() =>
+                    ask("Enter OpenRouter model ID", preset.model, (model) =>
+                      updatePreset({ model }),
+                    )
+                  }
+                >
+                  Enter model ID manually
+                </button>
+                <button
+                  disabled={!project || !preset.model}
+                  onClick={() => updatePreset({ model: "" })}
+                >
+                  Clear selection
+                </button>
+              </div>
               {models
                 .filter((m) => m.id === preset.model)
                 .map((m) => (
@@ -1589,6 +1605,7 @@ export default function Workspace() {
                   (
                     {
                       settings: "Your writing room",
+                      models: "Choose an OpenRouter model",
                       history: "Section history",
                       proposal: "A possible next version",
                       inspector: "Exactly what the model sees",
@@ -1602,6 +1619,85 @@ export default function Workspace() {
                 ×
               </button>
             </div>
+            {modal === "models" && (
+              <>
+                <label>
+                  Search available models
+                  <input
+                    autoFocus
+                    type="search"
+                    value={modelSearch}
+                    onChange={(e) => setModelSearch(e.target.value)}
+                    placeholder="Search by model or provider…"
+                  />
+                </label>
+                <div className="model-results">
+                  {models
+                    .filter((model) => {
+                      const query = modelSearch.trim().toLowerCase();
+                      return (
+                        !query ||
+                        model.id.toLowerCase().includes(query) ||
+                        model.name.toLowerCase().includes(query)
+                      );
+                    })
+                    .slice(0, 100)
+                    .map((model) => (
+                      <button
+                        key={model.id}
+                        className={model.id === preset.model ? "selected" : ""}
+                        onClick={() => {
+                          updatePreset({ model: model.id });
+                          setModal("");
+                        }}
+                      >
+                        <strong>{model.name}</strong>
+                        <small>
+                          {model.id} · {model.context_length.toLocaleString()} tokens
+                        </small>
+                      </button>
+                    ))}
+                  {!models.length && (
+                    <p>
+                      The available model list could not be loaded. Enter a
+                      model ID manually.
+                    </p>
+                  )}
+                  {!!models.length &&
+                    !models.some((model) => {
+                      const query = modelSearch.trim().toLowerCase();
+                      return (
+                        !query ||
+                        model.id.toLowerCase().includes(query) ||
+                        model.name.toLowerCase().includes(query)
+                      );
+                    }) && <p>No models match that search.</p>}
+                </div>
+                <div className="modal-actions">
+                  <button
+                    onClick={() => {
+                      setModal("");
+                      ask(
+                        "Enter OpenRouter model ID",
+                        preset.model,
+                        (model) => updatePreset({ model }),
+                      );
+                    }}
+                  >
+                    Enter model ID manually
+                  </button>
+                  <button
+                    disabled={!preset.model}
+                    onClick={() => {
+                      updatePreset({ model: "" });
+                      setModal("");
+                    }}
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              </>
+            )}
             {modal === "settings" && (
               <>
                 <p>
