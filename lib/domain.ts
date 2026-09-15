@@ -201,6 +201,19 @@ export function descendants(p: Project, id: string): Set<string> {
   }
   return ids;
 }
+export function removeNode(p: Project, id: string): Project {
+  const node = p.nodes.find((candidate) => candidate.id === id);
+  if (!node || node.kind === "project")
+    throw new Error("Only books, chapters, and scenes can be removed here.");
+  const removed = descendants(p, id);
+  return {
+    ...p,
+    nodes: p.nodes.filter((candidate) => !removed.has(candidate.id)),
+    proposals: p.proposals.filter(
+      (proposal) => !removed.has(proposal.nodeId),
+    ),
+  };
+}
 export function exportMarkdown(p: Project, id: string) {
   const ordered: Node[] = [];
   const walk = (nodeId: string) => {

@@ -15,6 +15,7 @@ import {
   makeNode,
   makeProject,
   promptMessages,
+  removeNode,
   sources,
   validateProject,
   type Kind,
@@ -99,7 +100,7 @@ export default function Workspace() {
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     description: string;
-    action: () => void;
+    action: () => void | Promise<void>;
   } | null>(null);
   const knownSources = useRef<string[]>([]);
   const current = useRef<Project | null>(null),
@@ -372,6 +373,41 @@ export default function Workspace() {
       }));
     change({ ...project, nodes: [...project.nodes, ...copies] });
     selectNode(copies[0]);
+  }
+  function clearConversation() {
+    const p = current.current;
+    if (!p) return;
+    change(
+      { ...p, messages: [] },
+      { action: "clear-conversation" },
+    );
+  }
+  function deleteNode() {
+    const p = current.current;
+    if (!p || !node || node.kind === "project") return;
+    const root = p.nodes[0];
+    change(
+      removeNode(p, node.id),
+      { action: "delete-node", kind: node.kind, title: node.title },
+    );
+    selectNode(root);
+  }
+  async function deleteProject() {
+    const p = current.current;
+    if (!p || demo) return;
+    try {
+      await api(`projects?id=${p.id}`, undefined, "DELETE");
+      setRows((existing) => existing.filter((row) => row.id !== p.id));
+      current.current = null;
+      revision.current = 0;
+      dirty.current = false;
+      setProject(null);
+      setSelected("");
+      setStatus("Project deleted");
+      setMenu(false);
+    } catch (e) {
+      alertError(e);
+    }
   }
   async function history() {
     if (!(await save())) return;
@@ -1010,6 +1046,26 @@ export default function Workspace() {
                       >
                         Export {node.kind}
                       </button>
+                      <button
+                        className="danger"
+                        disabled={busy || demo}
+                        onClick={() => {
+                          const isProject = node.kind === "project";
+                          const count = isProject
+                            ? project.nodes.length - 1
+                            : descendants(project, node.id).size - 1;
+                          setConfirmDialog({
+                            title: `Delete ${node.kind}?`,
+                            description: isProject
+                              ? `Permanently delete “${project.title},” including all books, scenes, writing, conversation, proposals, and version history? This cannot be undone.`
+                              : `Permanently delete “${node.title}”${count ? ` and its ${count} contained item${count === 1 ? "" : "s"}` : ""}? This cannot be undone.`,
+                            action: isProject ? deleteProject : deleteNode,
+                          });
+                          setMenu(false);
+                        }}
+                      >
+                        Delete {node.kind}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1063,6 +1119,25 @@ export default function Workspace() {
                 >
                   ↓ .md
                 </button>
+                {section === "outline" && (node.sections.outline || "").trim() && (
+                  <button
+                    className="danger"
+                    disabled={busy}
+                    onClick={() =>
+                      setConfirmDialog({
+                        title: "Clear this outline?",
+                        description:
+                          "The outline text will be cleared. You can restore its previous contents from History.",
+                        action: () => {
+                          textChange("");
+                          meta.current = { action: "clear-outline" };
+                        },
+                      })
+                    }
+                  >
+                    Clear outline
+                  </button>
+                )}
               </div>
               {node.kind === 'book' && <div className="editor-tools">
                 {section==='synopsis' && <button disabled={busy} onClick={()=>void generate('outline')}>Generate outline</button>}
@@ -1178,6 +1253,24 @@ export default function Workspace() {
           {panel === "chat" ? (
             <>
               <div className="conversation">
+                {!!project?.messages.length && (
+                  <div className="chat-actions">
+                    <button
+                      className="danger"
+                      disabled={busy}
+                      onClick={() =>
+                        setConfirmDialog({
+                          title: "Clear conversation?",
+                          description:
+                            "This permanently removes the brainstorming conversation from this project. Saved writing and completed AI response checkpoints are unaffected.",
+                          action: clearConversation,
+                        })
+                      }
+                    >
+                      Clear conversation
+                    </button>
+                  </div>
+                )}
                 {!project?.messages.length && (
                   <div className="chat-empty">
                     <span className="eyebrow">THINK IT THROUGH</span>
@@ -1845,7 +1938,7 @@ export default function Workspace() {
                 className="primary"
                 onClick={async () => {
                   if (await save()) {
-                    confirmDialog.action();
+                    await confirmDialog.action();
                     setConfirmDialog(null);
                   }
                 }}

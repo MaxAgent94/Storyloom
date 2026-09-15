@@ -8,6 +8,7 @@ import {
   validateProject,
   exportMarkdown,
   promptMessages,
+  removeNode,
 } from "../lib/domain.ts";
 test("context stays explicit, follows ancestry, and does not leak another book", () => {
   const p = makeProject("Series");
@@ -37,6 +38,31 @@ test("invalid hierarchy and duplicate IDs are rejected", () => {
   p.nodes.pop();
   p.nodes.push(p.nodes[0]);
   assert.equal(validateProject(p), false);
+});
+test("deleting a book removes its descendants and proposals without touching siblings", () => {
+  const p = makeProject("Series"),
+    book = makeNode("book", p.id, "Delete me"),
+    keep = makeNode("book", p.id, "Keep me"),
+    chapter = makeNode("chapter", book.id, "Chapter"),
+    scene = makeNode("scene", chapter.id, "Scene");
+  p.nodes.push(book, keep, chapter, scene);
+  p.proposals.push({
+    id: crypto.randomUUID(),
+    nodeId: scene.id,
+    section: "manuscript",
+    previous: "",
+    output: "Draft",
+    model: "model",
+    preset: "writing",
+    instruction: "Write",
+    at: new Date().toISOString(),
+    context: "",
+    status: "pending",
+  });
+  const result = removeNode(p, book.id);
+  assert.deepEqual(result.nodes.map((node) => node.title), ["Series", "Keep me"]);
+  assert.equal(result.proposals.length, 0);
+  assert.throws(() => removeNode(p, p.id));
 });
 test("export scopes a chapter and preserves Markdown verbatim", () => {
   const p = makeProject("Series"),

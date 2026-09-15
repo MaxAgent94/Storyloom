@@ -8,10 +8,14 @@ export const supabase = configured
       process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     )
   : null;
-export async function api(path: string, body?: unknown) {
+export async function api(
+  path: string,
+  body?: unknown,
+  method: "GET" | "POST" | "DELETE" = body === undefined ? "GET" : "POST",
+) {
   const { data } = await supabase!.auth.getSession();
   const r = await fetch(`/api/${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${data.session?.access_token || ""}`,

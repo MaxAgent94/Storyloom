@@ -46,3 +46,18 @@ export async function POST(req: Request) {
     return failure(e);
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { db } = await session(req);
+    const id = new URL(req.url).searchParams.get("id");
+    if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))
+      throw new Error("Invalid project ID.");
+    const { data, error } = await db.rpc("delete_project", { p_id: id });
+    if (error) throw error;
+    if (!data) throw new Error("Project not found or already deleted.");
+    return Response.json({ ok: true });
+  } catch (e) {
+    return failure(e);
+  }
+}

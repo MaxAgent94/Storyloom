@@ -71,6 +71,15 @@ test("database atomically versions edits, rejects stale saves, and enforces owne
       other,
     ]);
     assert.equal(
+      (
+        await db.query<{ delete_project: boolean }>(
+          "select public.delete_project($1)",
+          [p.id],
+        )
+      ).rows[0].delete_project,
+      false,
+    );
+    assert.equal(
       (await db.query("select * from public.projects")).rows.length,
       0,
     );
@@ -83,6 +92,23 @@ test("database atomically versions edits, rejects stale saves, and enforces owne
       crypto.randomUUID(),
     ]);
     await assert.rejects(save(0), /Unauthorized/);
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
+      owner,
+    ]);
+    assert.equal(
+      (
+        await db.query<{ delete_project: boolean }>(
+          "select public.delete_project($1)",
+          [p.id],
+        )
+      ).rows[0].delete_project,
+      true,
+    );
+    assert.equal((await db.query("select * from public.projects")).rows.length, 0);
+    assert.equal(
+      (await db.query("select * from public.section_versions")).rows.length,
+      0,
+    );
   } finally {
     await db.close();
   }
