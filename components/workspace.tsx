@@ -797,7 +797,17 @@ export default function Workspace() {
         <button disabled={!project || busy} onClick={() => setFocus(!focus)}>
           {focus ? "Leave focus" : "Focus"}
         </button>
-        <button onClick={() => setModal("settings")}>Settings</button>
+        <button
+          onClick={() => {
+            setModal("settings");
+            if (signed && !demo)
+              api("settings")
+                .then((x) => setHasKey(x.hasKey))
+                .catch(alertError);
+          }}
+        >
+          Settings
+        </button>
         <button className="ai-toggle" onClick={() => setRight(!right)}>
           Writing partner
         </button>
@@ -1503,11 +1513,11 @@ export default function Workspace() {
               <>
                 <p>
                   {hasKey
-                    ? "Your OpenRouter key is saved. Enter another key to replace it."
-                    : "Add your OpenRouter key to begin brainstorming."}
+                    ? "Your account-wide OpenRouter key is saved. Enter another key to replace it for every project."
+                    : "Add one OpenRouter key for this StoryLoom account. It will work across every project."}
                 </p>
                 <label>
-                  OpenRouter API key
+                  Account OpenRouter API key
                   <input
                     type="password"
                     autoComplete="off"
@@ -1523,17 +1533,18 @@ export default function Workspace() {
                       await api("settings", { key });
                       setKey("");
                       setHasKey(true);
-                      setStatus("OpenRouter key saved");
+                      setStatus("Account OpenRouter key saved");
                     } catch (e) {
                       alertError(e);
                     }
                   }}
                 >
-                  Save key securely
+                  Save account key securely
                 </button>
                 <p className="muted">
-                  Encrypted at rest. Used only by the server. Never included in
-                  project exports.
+                  Shared by all your StoryLoom projects. Encrypted at rest,
+                  used only by the server, and never included in project
+                  exports.
                 </p>
                 <button
                   disabled={!project || demo}

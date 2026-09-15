@@ -36,6 +36,18 @@ test("database atomically versions edits, rejects stale saves, and enforces owne
         [p.id, JSON.stringify(p), expected, JSON.stringify({ action })],
       );
     assert.equal((await save(0)).rows[0].save_project, 1);
+    await db.query(
+      "insert into public.provider_credentials(user_id,ciphertext) values($1,'first') on conflict(user_id) do update set ciphertext=excluded.ciphertext",
+      [owner],
+    );
+    await db.query(
+      "insert into public.provider_credentials(user_id,ciphertext) values($1,'replacement') on conflict(user_id) do update set ciphertext=excluded.ciphertext",
+      [owner],
+    );
+    const credentials = await db.query<{ ciphertext: string }>(
+      "select ciphertext from public.provider_credentials",
+    );
+    assert.deepEqual(credentials.rows, [{ ciphertext: "replacement" }]);
     b.sections.synopsis = "New";
     assert.equal((await save(1, "ai-apply")).rows[0].save_project, 2);
     await assert.rejects(save(1), /conflict/i);

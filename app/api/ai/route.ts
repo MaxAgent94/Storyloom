@@ -32,11 +32,16 @@ export async function POST(req: Request) {
     const context = contextText(p, n, b.action === 'structure' ? structureSources(p,n,b.sources) : b.sources);
     const history = b.action !== 'structure' && b.includeChat ? p.messages.slice(-20) : [];
     if (b.action === 'structure') { b.instruction = structureInstruction; b.section = 'outline'; }
-    const { data: cred } = await db
+    const { data: cred, error: credentialError } = await db
       .from("provider_credentials")
       .select("ciphertext")
-      .single();
-    if (!cred) throw new Error("Add your OpenRouter API key in Settings.");
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (credentialError) throw credentialError;
+    if (!cred)
+      throw new Error(
+        "Add your account OpenRouter API key in Settings. It will be shared by every project.",
+      );
     const messages = promptMessages(context, history, b.instruction);
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",

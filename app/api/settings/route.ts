@@ -1,13 +1,14 @@
 import { session, failure, body, encrypt } from "@/lib/server";
 export async function GET(req: Request) {
   try {
-    const { db } = await session(req);
+    const { db, user } = await session(req);
     const { data, error } = await db
       .from("provider_credentials")
       .select("updated_at")
+      .eq("user_id", user.id)
       .maybeSingle();
     if (error) throw error;
-    return Response.json({ hasKey: !!data });
+    return Response.json({ hasKey: !!data, scope: "account" });
   } catch (e) {
     return failure(e);
   }
