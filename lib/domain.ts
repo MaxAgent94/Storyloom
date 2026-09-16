@@ -26,6 +26,7 @@ export type Preset = {
   temperature: number;
   maxTokens: number;
   contextKeys: string[];
+  manuscriptWords?: number;
 };
 export type Proposal = {
   id: string;
@@ -80,6 +81,8 @@ export const labels: Record<string, string> = {
   currentAct: "Current act",
   recentContext: "Recent story state",
 };
+export const DEFAULT_MANUSCRIPT_CONTEXT_WORDS = 5000;
+export const MAX_MANUSCRIPT_CONTEXT_WORDS = 20000;
 export const defaultPresets: Preset[] = [
   {
     id: "economy",
@@ -87,6 +90,7 @@ export const defaultPresets: Preset[] = [
     model: "",
     temperature: 0.7,
     maxTokens: 4096,
+    manuscriptWords: DEFAULT_MANUSCRIPT_CONTEXT_WORDS,
     contextKeys: ["synopsis", "outline", "beats", "canon"],
   },
   {
@@ -95,6 +99,7 @@ export const defaultPresets: Preset[] = [
     model: "",
     temperature: 0.8,
     maxTokens: 8192,
+    manuscriptWords: DEFAULT_MANUSCRIPT_CONTEXT_WORDS,
     contextKeys: [
       "synopsis",
       "detailedBeats",
@@ -110,6 +115,7 @@ export const defaultPresets: Preset[] = [
     model: "",
     temperature: 0.6,
     maxTokens: 8192,
+    manuscriptWords: DEFAULT_MANUSCRIPT_CONTEXT_WORDS,
     contextKeys: [
       "synopsis",
       "outline",
@@ -164,11 +170,42 @@ export function sources(p: Project, n: Node) {
       })),
   );
 }
-export function contextText(p: Project, n: Node, ids: string[]) {
+export function manuscriptContextWords(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_MANUSCRIPT_CONTEXT_WORDS;
+  return Math.max(0, Math.min(MAX_MANUSCRIPT_CONTEXT_WORDS, Math.floor(parsed)));
+}
+export function recentWords(text: string, wordLimit: number) {
+  const limit = manuscriptContextWords(wordLimit);
+  if (!limit) return "";
+  let index = text.length - 1;
+  let words = 0;
+  while (index >= 0) {
+    while (index >= 0 && /\s/.test(text[index])) index -= 1;
+    if (index < 0) break;
+    words += 1;
+    while (index >= 0 && !/\s/.test(text[index])) index -= 1;
+    if (words === limit) return text.slice(index + 1);
+  }
+  return text;
+}
+export function contextText(
+  p: Project,
+  n: Node,
+  ids: string[],
+  manuscriptWords = DEFAULT_MANUSCRIPT_CONTEXT_WORDS,
+) {
   const wanted = new Set(ids);
   return sources(p, n)
     .filter((s) => wanted.has(s.id))
-    .map((s) => `## ${s.label}\n${s.text}`)
+    .map((s) => {
+      if (s.key !== "manuscript") return `## ${s.label}\n${s.text}`;
+      const text = recentWords(s.text, manuscriptWords);
+      if (!text) return "";
+      const limit = manuscriptContextWords(manuscriptWords);
+      return `## ${s.label} · most recent ${limit.toLocaleString()} words maximum\n${text}`;
+    })
+    .filter(Boolean)
     .join("\n\n");
 }
 export const systemPrompt =
@@ -262,6 +299,10 @@ export function validateProject(value: unknown): value is Project {
         typeof s.model !== "string" ||
         !Array.isArray(s.contextKeys) ||
         s.contextKeys.some((k) => typeof k !== "string") ||
+        (s.manuscriptWords !== undefined &&
+          (!Number.isInteger(s.manuscriptWords) ||
+            s.manuscriptWords < 0 ||
+            s.manuscriptWords > MAX_MANUSCRIPT_CONTEXT_WORDS)) ||
         !Number.isFinite(s.temperature) ||
         !Number.isFinite(s.maxTokens),
     ) ||

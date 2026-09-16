@@ -7,11 +7,14 @@ import { parseStructure, validStructure, structureSources, structureInstruction,
 import {
   ancestry,
   contextText,
+  DEFAULT_MANUSCRIPT_CONTEXT_WORDS,
   defaultPresets,
   descendants,
   exportMarkdown,
   fields,
   labels,
+  manuscriptContextWords,
+  MAX_MANUSCRIPT_CONTEXT_WORDS,
   makeNode,
   makeProject,
   promptMessages,
@@ -116,8 +119,13 @@ export default function Workspace() {
     preset =
       project?.presets.find((p) => p.id === presetId) || defaultPresets[0];
   const available = project && node ? sources(project, node) : [];
+  const recentManuscriptWords = manuscriptContextWords(
+    preset.manuscriptWords ?? DEFAULT_MANUSCRIPT_CONTEXT_WORDS,
+  );
   const context =
-    project && node ? contextText(project, node, selectedSources) : "";
+    project && node
+      ? contextText(project, node, selectedSources, recentManuscriptWords)
+      : "";
   const pending =
     project?.proposals.filter((p) => p.status === "pending") || [];
   const activeProposal = project?.proposals.find((p) => p.id === proposalId);
@@ -557,6 +565,7 @@ export default function Workspace() {
         model: preset.model,
         temperature: preset.temperature,
         maxTokens: preset.maxTokens,
+        manuscriptWords: recentManuscriptWords,
         section: targetSection,
         preset: preset.name,
         action,
@@ -1345,25 +1354,50 @@ export default function Workspace() {
               {available.length === 0 && (
                 <p>Write a little first. Your sections will appear here.</p>
               )}
-              {available.map((s) => (
-                <label key={s.id} className="context-item">
-                  <input
-                    type="checkbox"
-                    checked={selectedSources.includes(s.id)}
-                    onChange={(e) =>
-                      setSelectedSources((ids) =>
-                        e.target.checked
-                          ? [...ids, s.id]
-                          : ids.filter((id) => id !== s.id),
-                      )
-                    }
-                  />
-                  <span>
-                    {s.label}
-                    <small>{s.text.length.toLocaleString()} characters</small>
-                  </span>
-                </label>
-              ))}
+              {available.map((s) => {
+                const selected = selectedSources.includes(s.id);
+                return (
+                  <div key={s.id} className={s.key === "manuscript" ? "manuscript-context" : ""}>
+                    <label className="context-item">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(e) =>
+                          setSelectedSources((ids) =>
+                            e.target.checked
+                              ? [...ids, s.id]
+                              : ids.filter((id) => id !== s.id),
+                          )
+                        }
+                      />
+                      <span>
+                        {s.key === "manuscript" ? `${s.label} · recent only` : s.label}
+                        <small>
+                          {s.key === "manuscript"
+                            ? `Up to ${recentManuscriptWords.toLocaleString()} recent words will be attached`
+                            : `${s.text.length.toLocaleString()} characters`}
+                        </small>
+                      </span>
+                    </label>
+                    {s.key === "manuscript" && selected && (
+                      <label className="manuscript-context-limit">
+                        Recent manuscript words
+                        <input
+                          type="range"
+                          min="500"
+                          max={MAX_MANUSCRIPT_CONTEXT_WORDS}
+                          step="500"
+                          value={Math.max(500, recentManuscriptWords)}
+                          onChange={(e) =>
+                            updatePreset({ manuscriptWords: Number(e.target.value) })
+                          }
+                        />
+                        <output>{recentManuscriptWords.toLocaleString()}</output>
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
               <label className="check">
                 <input
                   type="checkbox"
@@ -1900,6 +1934,7 @@ export default function Workspace() {
                       model: preset.model,
                       temperature: preset.temperature,
                       max_tokens: preset.maxTokens,
+                      recent_manuscript_words: recentManuscriptWords,
                       messages: promptMessages(
                         context,
                         includeChat ? project?.messages.slice(-20) || [] : [],

@@ -569,6 +569,33 @@ small {
   display: block;
   margin-top: 5px;
 }
+.manuscript-context {
+  border-bottom: 1px solid var(--line);
+}
+.manuscript-context .context-item {
+  border-bottom: 0;
+}
+.manuscript-context-limit {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  padding: 0 12px 14px 42px;
+  color: var(--muted);
+}
+.manuscript-context-limit input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
+.manuscript-context-limit output {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .help {
   padding: 18px;
   background: var(--tint);

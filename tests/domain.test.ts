@@ -4,6 +4,8 @@ import {
   makeProject,
   makeNode,
   contextText,
+  MAX_MANUSCRIPT_CONTEXT_WORDS,
+  recentWords,
   sources,
   validateProject,
   exportMarkdown,
@@ -29,6 +31,20 @@ test("context stays explicit, follows ancestry, and does not leak another book",
   ]);
   assert.match(context, /Outline A/);
   assert.doesNotMatch(context, /Secret B|Maybe kill him|No flight/);
+});
+test("manuscript context includes only the configured recent words", () => {
+  const p = makeProject("Series"), book = makeNode("book", p.id, "Book");
+  p.nodes.push(book);
+  book.sections.manuscript = "one two three four five six";
+  const context = contextText(p, book, [`${book.id}:manuscript`], 3);
+  assert.match(context, /most recent 3 words maximum/);
+  assert.match(context, /four five six$/);
+  assert.doesNotMatch(context, /one two three/);
+  assert.equal(MAX_MANUSCRIPT_CONTEXT_WORDS, 20000);
+  const oversized = Array.from({ length: 20001 }, (_, i) => `word${i}`).join(" ");
+  const capped = recentWords(oversized, 50000);
+  assert.equal(capped.split(/\s+/).length, 20000);
+  assert.ok(capped.startsWith("word1 "));
 });
 test("invalid hierarchy and duplicate IDs are rejected", () => {
   const p = makeProject("Book");

@@ -1,5 +1,5 @@
 import { session, failure, body, decrypt } from "@/lib/server";
-import { contextText, promptMessages, insertProse, type Project } from "@/lib/domain";
+import { contextText, promptMessages, insertProse, manuscriptContextWords, type Project } from "@/lib/domain";
 import { structureSources, structureInstruction } from '@/lib/structure';
 export const maxDuration = 300;
 export async function POST(req: Request) {
@@ -29,7 +29,12 @@ export async function POST(req: Request) {
       n = p.nodes.find((n) => n.id === b.nodeId);
     if (!n) throw new Error("Scene or book not found.");
     if (b.action === 'structure' && n.kind !== 'book') throw new Error('Select a Book to propose structure.');
-    const context = contextText(p, n, b.action === 'structure' ? structureSources(p,n,b.sources) : b.sources);
+    const context = contextText(
+      p,
+      n,
+      b.action === 'structure' ? structureSources(p,n,b.sources) : b.sources,
+      manuscriptContextWords(b.manuscriptWords),
+    );
     const history = b.action !== 'structure' && b.includeChat ? p.messages.slice(-20) : [];
     if (b.action === 'structure') { b.instruction = structureInstruction; b.section = 'outline'; }
     const { data: cred, error: credentialError } = await db
