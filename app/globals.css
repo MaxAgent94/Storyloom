@@ -300,6 +300,23 @@ small {
   margin: 9px 0 0;
   overflow-wrap: anywhere;
 }
+.book-workspace .breadcrumbs {
+  padding: 10px 28px 0;
+  font-size: 11px;
+}
+.book-workspace .title-row {
+  min-height: 54px;
+  padding: 4px 28px 8px;
+}
+.book-workspace .title-row h1 {
+  margin: 1px 0 0;
+  font-size: 27px;
+  line-height: 1.12;
+}
+.book-workspace .eyebrow {
+  font-size: 10px;
+  letter-spacing: 1.6px;
+}
 .eyebrow {
   font-size: 11px;
   letter-spacing: 2px;

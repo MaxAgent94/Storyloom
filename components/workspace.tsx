@@ -955,7 +955,9 @@ export default function Workspace() {
             </button>
           </div>
         </nav>
-        <main className="workspace">
+        <main
+          className={`workspace ${node?.kind === "book" ? "book-workspace" : ""}`}
+        >
           {node && project ? (
             <>
               <div className="breadcrumbs">
