@@ -114,6 +114,7 @@ export default function Workspace() {
     demoRef = useRef(false),
     meta = useRef<Record<string, unknown>>({ action: "manual" }),
     editor = useRef<HTMLTextAreaElement>(null),
+    conversation = useRef<HTMLDivElement>(null),
     importer = useRef<HTMLInputElement>(null);
   const node = project?.nodes.find((n) => n.id === selected),
     preset =
@@ -129,6 +130,8 @@ export default function Workspace() {
   const pending =
     project?.proposals.filter((p) => p.status === "pending") || [];
   const activeProposal = project?.proposals.find((p) => p.id === proposalId);
+  const manuscript = node?.sections.manuscript || "";
+  const latestMessage = project?.messages.at(-1)?.id || "";
   function alertError(e: unknown) {
     setError(
       e instanceof Error
@@ -284,6 +287,23 @@ export default function Workspace() {
     window.addEventListener("keydown", keyboard);
     return () => window.removeEventListener("keydown", keyboard);
   }, []);
+  useEffect(() => {
+    if (section !== "manuscript") return;
+    const frame = requestAnimationFrame(() => {
+      const element = editor.current;
+      if (element && document.activeElement !== element)
+        element.scrollTop = element.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selected, section, manuscript]);
+  useEffect(() => {
+    if (panel !== "chat") return;
+    const frame = requestAnimationFrame(() => {
+      const element = conversation.current;
+      if (element) element.scrollTop = element.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [panel, right, project?.id, latestMessage, busy]);
   async function openProject(id: string) {
     if (busy) return;
     if (!(await save())) return;
@@ -1264,7 +1284,7 @@ export default function Workspace() {
           </div>
           {panel === "chat" ? (
             <>
-              <div className="conversation">
+              <div className="conversation" ref={conversation}>
                 {!!project?.messages.length && (
                   <div className="chat-actions">
                     <button
