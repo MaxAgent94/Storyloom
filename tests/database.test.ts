@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { makeProject, makeNode } from "../lib/domain.ts";
+import { projectDelta, applyProjectDelta } from '../lib/project-transfer.ts';
 test("database atomically versions edits, rejects stale saves, and enforces owner boundaries", async () => {
   const db = new PGlite();
   try {
@@ -67,6 +68,17 @@ test("database atomically versions edits, rejects stale saves, and enforces owne
     );
     assert.equal(versions.rows.length, 4);
     assert.equal(versions.rows.at(-1)?.content, "Original");
+    // Exercise delta reconstruction through the same atomic RPC used by the API.
+    const edited = structuredClone(p);
+    edited.nodes[1].sections.manuscript = 'New manuscript text';
+    edited.messages.push({ id: 'large-history', role: 'assistant', content: 'History '.repeat(500000), at: '' });
+    const reconstructed = applyProjectDelta(p, projectDelta(p, edited));
+    await db.query('select public.save_project($1,$2,$3,$4)',
+      [p.id, JSON.stringify(reconstructed), 3, JSON.stringify({ action: 'delta-save' })]);
+    const saved = await db.query<{ body: unknown; revision: number }>('select body,revision from public.projects where id=$1', [p.id]);
+    assert.deepEqual(saved.rows[0].body, edited);
+    assert.equal(saved.rows[0].revision, 4);
+    await assert.rejects(save(3), /conflict/i);
     await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
       other,
     ]);

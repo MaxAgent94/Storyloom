@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, configured, supabase } from "@/lib/browser";
+import { projectDelta } from "@/lib/project-transfer";
 import StructureReview from './structure-review';
 import BookBeats from './book-beats';
 import { parseStructure, validStructure, structureSources, structureInstruction, materialize, type ChapterPlan } from '@/lib/structure';
@@ -108,6 +109,7 @@ export default function Workspace() {
   } | null>(null);
   const knownSources = useRef<string[]>([]);
   const current = useRef<Project | null>(null),
+    savedProject = useRef<Project | null>(null),
     revision = useRef(0),
     dirty = useRef(false),
     saving = useRef<Promise<boolean> | null>(null),
@@ -178,11 +180,14 @@ export default function Workspace() {
       setStatus("Saving…");
       try {
         const result = await api("projects", {
-          project: snapshot,
+          ...(savedProject.current?.id === snapshot.id && revision.current > 0
+            ? { delta: projectDelta(savedProject.current, snapshot) }
+            : { project: snapshot }),
           revision: revision.current,
           meta: metadata,
         });
         revision.current = result.revision;
+        savedProject.current = snapshot;
         if (current.current === snapshot) {
           dirty.current = false;
           setStatus("Saved to cloud");
@@ -310,6 +315,7 @@ export default function Workspace() {
     try {
       const row = await api(`projects?id=${id}`);
       current.current = row.body;
+      savedProject.current = row.body;
       revision.current = row.revision;
       dirty.current = false;
       setProject(row.body);
@@ -604,7 +610,7 @@ export default function Workspace() {
         {
           id: crypto.randomUUID(),
           role: "assistant" as const,
-          content: result.output,
+          content: result.responseText ?? result.output,
           at,
           model: result.model,
         },

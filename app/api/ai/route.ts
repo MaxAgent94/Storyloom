@@ -93,6 +93,7 @@ export async function POST(req: Request) {
     const completed = {
       id: crypto.randomUUID(),
       output: proposedOutput,
+      responseText: output,
       context,
       model: result.model || b.model,
       usage: result.usage,

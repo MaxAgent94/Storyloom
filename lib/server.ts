@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { gunzipSync } from 'node:zlib';
 
 type SupabaseFailure = {
   code?: string;
@@ -115,11 +116,14 @@ export function failure(e: unknown) {
   );
 }
 export async function body(req: Request) {
-  const text = await req.text();
-  if (text.length > 3_500_000)
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (bytes.length > 3_500_000)
     throw new Error(
-      "This request is too large. Export a backup and split the project into books.",
+      "The save transfer exceeded its safety limit. Keep this tab open and download your draft backup. Your writing has not been deleted.",
     );
+  const text = req.headers.get('x-storyloom-transfer') === 'gzip'
+    ? gunzipSync(bytes, { maxOutputLength: 64 * 1024 * 1024 }).toString('utf8')
+    : new TextDecoder().decode(bytes);
   return JSON.parse(text);
 }
 function key() {

@@ -1,5 +1,7 @@
 import { session, failure, body } from "@/lib/server";
 import { validateProject } from "@/lib/domain";
+import { applyProjectDelta } from "@/lib/project-transfer";
+import { gzipSync } from 'node:zlib';
 export async function GET(req: Request) {
   try {
     const { db } = await session(req);
@@ -16,6 +18,10 @@ export async function GET(req: Request) {
         .eq("id", id)
         .single();
       if (e) throw e;
+      if (req.headers.get('x-storyloom-transfer') === 'gzip')
+        return new Response(new Uint8Array(gzipSync(JSON.stringify(project))), {
+          headers: { 'Content-Type': 'application/octet-stream', 'X-Storyloom-Transfer': 'gzip', 'Cache-Control': 'no-store' },
+        });
       return Response.json(project);
     }
     return Response.json(data);
@@ -27,6 +33,14 @@ export async function POST(req: Request) {
   try {
     const { db } = await session(req);
     const b = await body(req);
+    if (b.delta) {
+      const { data: stored, error: readError } = await db.from('projects')
+        .select('body,revision').eq('id', b.delta.id).single();
+      if (readError) throw readError;
+      if (stored.revision !== b.revision)
+        throw new Error('Save conflict: another tab has newer changes. Download your draft before reloading.');
+      b.project = applyProjectDelta(stored.body, b.delta);
+    }
     if (!validateProject(b.project))
       throw new Error("Invalid project structure.");
     const { data, error } = await db.rpc("save_project", {
