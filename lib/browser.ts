@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+export class ApiError extends Error {
+  constructor(message: string, public code: string, public status: number) {
+    super(message);
+  }
+}
 export const configured =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -30,6 +35,6 @@ export async function api(
   const result = r.headers.get('x-storyloom-transfer') === 'gzip'
     ? await new Response(r.body!.pipeThrough(new DecompressionStream('gzip'))).json()
     : await r.json();
-  if (!r.ok) throw new Error(result.error || `Request failed (${r.status})`);
+  if (!r.ok) throw new ApiError(result.error || `Request failed (${r.status})`, result.code || 'REQUEST_FAILED', r.status);
   return result;
 }

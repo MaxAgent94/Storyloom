@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { api, configured, supabase } from "@/lib/browser";
-import { projectDelta } from "@/lib/project-transfer";
+import { api, ApiError, configured, supabase } from "@/lib/browser";
+import { projectDelta, reconcileProject } from "@/lib/project-transfer";
 import StructureReview from './structure-review';
 import BookBeats from './book-beats';
 import { parseStructure, validStructure, structureSources, structureInstruction, materialize, type ChapterPlan } from '@/lib/structure';
@@ -163,7 +163,7 @@ export default function Workspace() {
       ),
     });
   }
-  async function save(): Promise<boolean> {
+  async function save(recoveryAttempts = 0): Promise<boolean> {
     if (saving.current) {
       if (!(await saving.current)) return false;
       if (dirty.current) return save();
@@ -175,7 +175,9 @@ export default function Workspace() {
       return true;
     }
     const snapshot = current.current,
-      metadata = meta.current;
+      metadata = meta.current,
+      baseline = savedProject.current;
+    let retryRecovered = false;
     const run = (async () => {
       setStatus("Saving…");
       try {
@@ -191,6 +193,7 @@ export default function Workspace() {
         if (current.current === snapshot) {
           dirty.current = false;
           setStatus("Saved to cloud");
+          setError(previous => /cloud revision|Save conflict/.test(previous) ? '' : previous);
         } else setStatus("Unsaved changes");
         setRows((r) => [
           {
@@ -202,6 +205,26 @@ export default function Workspace() {
         ]);
         return true;
       } catch (e) {
+        if (e instanceof ApiError && e.code === 'SAVE_CONFLICT' && recoveryAttempts < 1 && baseline?.id === snapshot.id) {
+          try {
+            setStatus('Reconciling saved changes…');
+            const latest = await api(`projects?id=${snapshot.id}`);
+            const local = current.current;
+            if (!local || local.id !== snapshot.id) throw new Error('Project changed during save recovery.');
+            const merged = reconcileProject(baseline, local, latest.body, meta.current.action === 'manual');
+            savedProject.current = latest.body;
+            revision.current = latest.revision;
+            current.current = merged;
+            setProject(merged);
+            dirty.current = true;
+            retryRecovered = true;
+            return true;
+          } catch (recoveryError) {
+            setStatus('Not saved · local draft retained');
+            alertError(recoveryError);
+            return false;
+          }
+        }
         setStatus("Not saved");
         alertError(e);
         return false;
@@ -210,6 +233,7 @@ export default function Workspace() {
     saving.current = run;
     const ok = await run;
     saving.current = null;
+    if (retryRecovered) return save(recoveryAttempts + 1);
     if (ok && dirty.current && !demoRef.current) return save();
     return ok;
   }

@@ -1,4 +1,4 @@
-import { session, failure, body } from "@/lib/server";
+import { session, failure, body, RequestError } from "@/lib/server";
 import { validateProject } from "@/lib/domain";
 import { applyProjectDelta } from "@/lib/project-transfer";
 import { gzipSync } from 'node:zlib';
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
         .select('body,revision').eq('id', b.delta.id).single();
       if (readError) throw readError;
       if (stored.revision !== b.revision)
-        throw new Error('Save conflict: another tab has newer changes. Download your draft before reloading.');
+        throw new RequestError('The cloud revision changed. Your local draft has been retained.', 409, 'SAVE_CONFLICT');
       b.project = applyProjectDelta(stored.body, b.delta);
     }
     if (!validateProject(b.project))
@@ -49,12 +49,11 @@ export async function POST(req: Request) {
       p_expected: b.revision ?? 0,
       p_meta: b.meta || { action: "manual" },
     });
-    if (error)
-      throw new Error(
-        error.message.includes("conflict")
-          ? "Save conflict: another tab has newer changes. Download your draft before reloading."
-          : error.message,
-      );
+    if (error) {
+      if (/conflict/i.test(error.message))
+        throw new RequestError('The cloud revision changed. Your local draft has been retained.', 409, 'SAVE_CONFLICT');
+      throw new Error(error.message);
+    }
     return Response.json({ revision: data });
   } catch (e) {
     return failure(e);

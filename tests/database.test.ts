@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { makeProject, makeNode } from "../lib/domain.ts";
-import { projectDelta, applyProjectDelta } from '../lib/project-transfer.ts';
+import { projectDelta, applyProjectDelta, reconcileProject } from '../lib/project-transfer.ts';
 test("database atomically versions edits, rejects stale saves, and enforces owner boundaries", async () => {
   const db = new PGlite();
   try {
@@ -79,6 +79,14 @@ test("database atomically versions edits, rejects stale saves, and enforces owne
     assert.deepEqual(saved.rows[0].body, edited);
     assert.equal(saved.rows[0].revision, 4);
     await assert.rejects(save(3), /conflict/i);
+    const handEdited = structuredClone(p);
+    handEdited.nodes[1].sections.manuscript = 'Author hand edits';
+    const recovered = reconcileProject(p, handEdited, edited, true);
+    await db.query('select public.save_project($1,$2,$3,$4)',
+      [p.id, JSON.stringify(recovered), 4, JSON.stringify({ action: 'manual' })]);
+    const manuscriptHistory = await db.query<{ content: string }>(
+      "select content from public.section_versions where project_id=$1 and section='manuscript'", [p.id]);
+    assert.deepEqual(manuscriptHistory.rows.map(x => x.content).sort(), ['', 'New manuscript text', 'Author hand edits'].sort());
     await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
       other,
     ]);

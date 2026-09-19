@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeProject, makeNode, validateProject } from '../lib/domain.ts';
-import { projectDelta, applyProjectDelta } from '../lib/project-transfer.ts';
+import { projectDelta, applyProjectDelta, reconcileProject } from '../lib/project-transfer.ts';
 import { body } from '../lib/server.ts';
 import { gzipSync } from 'node:zlib';
 
@@ -42,4 +42,35 @@ test('delta preserves reordering, deletion, new records and edited proposals', (
   const invalid = projectDelta(p, next);
   invalid.collections.nodes.order.push('missing');
   assert.throws(() => applyProjectDelta(p, invalid), /Incomplete/);
+});
+
+test('save recovery recognizes lost responses and preserves edits made while waiting', () => {
+  const base = makeProject('Novel');
+  base.nodes.push(makeNode('book', base.id, 'Book'));
+  base.nodes[1].sections.manuscript = 'Original';
+  const cloud = structuredClone(base);
+  cloud.nodes[1].sections.manuscript = 'First edit';
+  assert.deepEqual(reconcileProject(base, cloud, cloud, true), cloud);
+  const local = structuredClone(cloud);
+  local.nodes[1].sections.manuscript = 'First edit and more typing';
+  cloud.nodes[1].sections.notes = 'Cloud note';
+  cloud.messages.push({ id: 'chat', role: 'assistant', content: 'New chat', at: '' });
+  const merged = reconcileProject(base, local, cloud, true);
+  assert.equal(merged.nodes[1].sections.manuscript, local.nodes[1].sections.manuscript);
+  assert.equal(merged.nodes[1].sections.notes, 'Cloud note');
+  assert.deepEqual(merged.messages, cloud.messages);
+  assert.equal(cloud.nodes[1].sections.manuscript, 'First edit');
+  assert.throws(() => reconcileProject(base, local, cloud, false), /Both copies changed/);
+});
+
+test('recovery does not overwrite remote-only manuscript changes or resurrect deleted books', () => {
+  const base = makeProject('Novel');
+  base.nodes.push(makeNode('book', base.id, 'Book'));
+  base.nodes[1].sections.manuscript = 'Original';
+  const local = structuredClone(base), cloud = structuredClone(base);
+  local.nodes[1].sections.notes = 'Local note';
+  cloud.nodes[1].sections.manuscript = 'Cloud manuscript';
+  assert.equal(reconcileProject(base, local, cloud, true).nodes[1].sections.manuscript, 'Cloud manuscript');
+  cloud.nodes.pop();
+  assert.throws(() => reconcileProject(base, local, cloud, true), /Both copies changed/);
 });
