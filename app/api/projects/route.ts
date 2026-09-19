@@ -1,6 +1,6 @@
 import { session, failure, body, RequestError } from "@/lib/server";
 import { validateProject } from "@/lib/domain";
-import { applyProjectDelta } from "@/lib/project-transfer";
+import { hydrateProject, validateStoredDelta } from "@/lib/project-storage";
 import { gzipSync } from 'node:zlib';
 export async function GET(req: Request) {
   try {
@@ -18,11 +18,13 @@ export async function GET(req: Request) {
         .eq("id", id)
         .single();
       if (e) throw e;
+      const { history, history_order: _historyOrder, ...record } = project;
+      const hydrated = { ...record, body: hydrateProject(project.body, history) };
       if (req.headers.get('x-storyloom-transfer') === 'gzip')
-        return new Response(new Uint8Array(gzipSync(JSON.stringify(project))), {
+        return new Response(new Uint8Array(gzipSync(JSON.stringify(hydrated))), {
           headers: { 'Content-Type': 'application/octet-stream', 'X-Storyloom-Transfer': 'gzip', 'Cache-Control': 'no-store' },
         });
-      return Response.json(project);
+      return Response.json(hydrated);
     }
     return Response.json(data);
   } catch (e) {
@@ -39,19 +41,22 @@ export async function POST(req: Request) {
       if (readError) throw readError;
       if (stored.revision !== b.revision)
         throw new RequestError('The cloud revision changed. Your local draft has been retained.', 409, 'SAVE_CONFLICT');
-      b.project = applyProjectDelta(stored.body, b.delta);
+      validateStoredDelta(stored.body, b.delta);
     }
-    if (!validateProject(b.project))
+    if (!b.delta && !validateProject(b.project))
       throw new Error("Invalid project structure.");
-    const { data, error } = await db.rpc("save_project", {
-      p_id: b.project.id,
-      p_body: b.project,
+    const { data, error } = await db.rpc("save_project_v2", {
+      p_id: b.delta?.id ?? b.project.id,
+      p_body: b.delta ? null : b.project,
+      p_delta: b.delta ?? null,
       p_expected: b.revision ?? 0,
       p_meta: b.meta || { action: "manual" },
     });
     if (error) {
       if (/conflict/i.test(error.message))
         throw new RequestError('The cloud revision changed. Your local draft has been retained.', 409, 'SAVE_CONFLICT');
+      if (error.code === '57014')
+        throw new RequestError('The database took too long to save. Your draft is still open; retry Save without reloading.', 503, 'SAVE_TIMEOUT');
       throw new Error(error.message);
     }
     return Response.json({ revision: data });

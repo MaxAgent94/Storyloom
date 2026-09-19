@@ -1,6 +1,7 @@
 import { session, failure, body, decrypt } from "@/lib/server";
 import { contextText, promptMessages, insertProse, manuscriptContextWords, type Project } from "@/lib/domain";
 import { structureSources, structureInstruction } from '@/lib/structure';
+import { hydrateProject } from '@/lib/project-storage';
 export const maxDuration = 300;
 export async function POST(req: Request) {
   try {
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
       throw new Error("Choose a model and enter guidance.");
     const { data: row, error } = await db
       .from("projects")
-      .select("body,revision")
+      .select("body,revision,messages:history->messages")
       .eq("id", b.projectId)
       .single();
     if (error) throw error;
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
       throw new Error(
         "The project changed in another tab. Reload before generating.",
       );
-    const p = row.body as Project,
+    const p = hydrateProject(row.body as Project, { messages: row.messages as Project['messages'] }),
       n = p.nodes.find((n) => n.id === b.nodeId);
     if (!n) throw new Error("Scene or book not found.");
     if (b.action === 'structure' && n.kind !== 'book') throw new Error('Select a Book to propose structure.');
