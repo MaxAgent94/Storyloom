@@ -19,6 +19,9 @@ import {
   makeNode,
   makeProject,
   promptMessages,
+  proposalAppendPrefix,
+  proposalDraft,
+  proposalContent,
   removeNode,
   sources,
   validateProject,
@@ -674,7 +677,7 @@ export default function Workspace() {
       if (action !== "chat") {
         if (action === 'prose') setSection('manuscript');
         setProposalId(proposal.id);
-        setProposalText(proposal.output);
+        setProposalText(proposalDraft(proposal));
         setModal("proposal");
       }
       setGuidance("");
@@ -701,6 +704,7 @@ export default function Workspace() {
       return;
     }
     let nodes = project.nodes;
+    const acceptedText = proposalContent(activeProposal, proposalText);
     if (branch) {
       if (n.kind === "project") {
         setError(
@@ -712,7 +716,7 @@ export default function Workspace() {
         ...structuredClone(n),
         id: crypto.randomUUID(),
         title: `${n.title} — alternative`,
-        sections: { ...n.sections, [activeProposal.section]: proposalText },
+        sections: { ...n.sections, [activeProposal.section]: acceptedText },
       };
       nodes = [...nodes, clone];
       selectNode(clone);
@@ -723,7 +727,7 @@ export default function Workspace() {
               ...x,
               sections: {
                 ...x.sections,
-                [activeProposal.section]: proposalText,
+                [activeProposal.section]: acceptedText,
               },
             }
           : x,
@@ -1376,7 +1380,7 @@ export default function Workspace() {
                       onChange={(e) => {
                         const p = pending.find((p) => p.id === e.target.value)!;
                         setProposalId(p.id);
-                        setProposalText(p.output);
+                        setProposalText(proposalDraft(p));
                         setModal("proposal");
                       }}
                     >
@@ -1935,9 +1939,9 @@ export default function Workspace() {
                     </pre>
                   </div>
                   <div>
-                    <h3>Proposed text · editable</h3>
+                    <h3>{proposalAppendPrefix(activeProposal) !== null ? 'New scene · editable' : 'Proposed text · editable'}</h3>
                     <textarea
-                      aria-label="Proposed text"
+                      aria-label={proposalAppendPrefix(activeProposal) !== null ? 'New scene' : 'Proposed text'}
                       value={proposalText}
                       onChange={(e) => setProposalText(e.target.value)}
                     />
@@ -1945,7 +1949,7 @@ export default function Workspace() {
                 </div>
                 <div className="modal-actions">
                   <button className="primary" onClick={() => applyProposal()}>
-                    Apply as new version
+                    {proposalAppendPrefix(activeProposal) !== null ? 'Append scene as new version' : 'Apply as new version'}
                   </button>
                   <button onClick={() => applyProposal(true)}>
                     Save as item copy
@@ -2040,7 +2044,7 @@ export default function Workspace() {
                           { action: "recover-generation" },
                         );
                         setProposalId(proposal.id);
-                        setProposalText(proposal.output);
+                        setProposalText(proposalDraft(proposal));
                         setModal("proposal");
                       }}
                     >

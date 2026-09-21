@@ -49,6 +49,21 @@ export type Project = {
   proposals: Proposal[];
   presets: Preset[];
 };
+// Keep stored proposals as complete versions, but review appended prose alone.
+// Requiring an exact unchanged prefix also supports existing saved proposals.
+export function proposalAppendPrefix(p: Pick<Proposal, 'section' | 'previous' | 'output'>): string | null {
+  if (p.section !== 'manuscript') return null;
+  const prefix = insertProse(p.previous, '', p.previous.length, p.previous.length);
+  return p.output.startsWith(prefix) && p.output.length > prefix.length ? prefix : null;
+}
+export function proposalDraft(p: Pick<Proposal, 'section' | 'previous' | 'output'>): string {
+  const prefix = proposalAppendPrefix(p);
+  return prefix === null ? p.output : p.output.slice(prefix.length);
+}
+export function proposalContent(p: Pick<Proposal, 'section' | 'previous' | 'output'>, draft: string): string {
+  const prefix = proposalAppendPrefix(p);
+  return prefix === null ? draft : prefix + draft;
+}
 export const fields: Record<Kind, string[]> = {
   project: ["notes", "canon", "voice", "research"],
   book: [
