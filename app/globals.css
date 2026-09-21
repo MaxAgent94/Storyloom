@@ -201,6 +201,8 @@ small {
   min-height: 0;
 }
 .book-beats { overflow-y: auto; flex: 1; padding: 20px; }
+.beats-jump { position: sticky; top: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 4px; background: var(--paper); }
+.beats-jump button { font-size: 12px; padding: 7px 9px; }
 .book-beats section { padding: 20px 0; border-bottom: 1px solid var(--line); }
 .book-beats textarea { width: 100%; min-height: 180px; margin: 12px 0; }
 .navigator:not(.open) { display: none; }
