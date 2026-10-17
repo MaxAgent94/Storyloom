@@ -4,6 +4,7 @@ import { api, ApiError, configured, supabase } from "@/lib/browser";
 import { projectDelta, reconcileProject } from "@/lib/project-transfer";
 import StructureReview from './structure-review';
 import BookBeats from './book-beats';
+import { sceneProseInstruction } from '@/lib/prose-prompt';
 import { parseStructure, validStructure, structureSources, structureInstruction, materialize, type ChapterPlan } from '@/lib/structure';
 import {
   ancestry,
@@ -595,11 +596,13 @@ export default function Workspace() {
               : action === "scenePlan"
                 ? "scenePlan"
                 : section;
-    const prose = node.sections.manuscript || '';
-    const start = section === 'manuscript' ? editor.current?.selectionStart ?? prose.length : prose.length;
-    const end = section === 'manuscript' ? editor.current?.selectionEnd ?? start : start;
+    const savedNode = p.nodes.find(n => n.id === target);
+    if (!savedNode) return;
+    const prose = savedNode.sections.manuscript || '';
+    const start = !beat && section === 'manuscript' ? editor.current?.selectionStart ?? prose.length : prose.length;
+    const end = !beat && section === 'manuscript' ? editor.current?.selectionEnd ?? start : start;
     const instruction = action === 'prose'
-      ? `Write only the prose to insert at the indicated cursor, or replace the selected passage. Preserve the writer's instructions and supplied dialogue. ${beat ? `Render this scene beat as prose: ${beat}` : guidance}\nBefore cursor:\n${prose.slice(Math.max(0,start-16000),start)}\nSelected passage:\n${prose.slice(start,end)}\nAfter cursor:\n${prose.slice(end,end+4000)}`
+      ? beat ? sceneProseInstruction(beat, guidance, prose) : `Write only the prose to insert at the indicated cursor, or replace the selected passage. Preserve the writer's instructions and supplied dialogue. ${guidance}\nBefore cursor:\n${prose.slice(Math.max(0,start-16000),start)}\nSelected passage:\n${prose.slice(start,end)}\nAfter cursor:\n${prose.slice(end,end+4000)}`
       : action === 'sceneBeats' ? `Turn the Book outline into editable scene beats. Use a ## Scene title heading for every planning unit, followed by what should happen. Do not write prose. ${guidance}` :
       action === "chat"
         ? guidance
